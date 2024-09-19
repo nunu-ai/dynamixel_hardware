@@ -40,11 +40,33 @@ ament_target_dependencies(
   dynamixel_workbench_toolbox
   )
 
+add_library(
+  ${PROJECT_NAME}_state_reader
+  SHARED
+  src/dynamixel_hardware_state_reader.cpp
+)
+target_include_directories(
+  ${PROJECT_NAME}_state_reader
+  PRIVATE
+  include
+)
+ament_target_dependencies(
+  ${PROJECT_NAME}_state_reader
+  rclcpp
+  hardware_interface
+  pluginlib
+  dynamixel_workbench_toolbox
+)
 
 pluginlib_export_plugin_description_file(hardware_interface dynamixel_hardware.xml)
+pluginlib_export_plugin_description_file(hardware_interface dynamixel_hardware_state_reader.xml)
 
 install(
   TARGETS ${PROJECT_NAME}
+  DESTINATION lib
+)
+install(
+  TARGETS ${PROJECT_NAME}_state_reader
   DESTINATION lib
 )
 install(

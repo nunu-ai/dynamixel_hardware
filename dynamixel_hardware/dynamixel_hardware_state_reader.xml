@@ -1,0 +1,9 @@
+<library path="dynamixel_hardware_state_reader">
+  <class name="dynamixel_hardware/DynamixelHardwareStateReader"
+         type="dynamixel_hardware::DynamixelHardwareStateReader"
+         base_class_type="hardware_interface::SystemInterface">
+    <description>
+      The ROBOTIS Dynamixel system interface - state reader.
+    </description>
+  </class>
+</library>

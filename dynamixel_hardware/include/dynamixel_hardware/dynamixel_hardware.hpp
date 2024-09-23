@@ -95,8 +95,11 @@ private:
   std::map<const char * const, const ControlItem *> control_items_;
   std::vector<Joint> joints_;
   std::vector<uint8_t> joint_ids_;
+  uint8_t gripper_id_{255};
+  float gripper_current_limit_{200.0f};
   bool torque_enabled_{false};
   ControlMode control_mode_{ControlMode::Position};
+  ControlMode gripper_control_mode_{ControlMode::CurrentBasedPosition};
   bool use_dummy_{false};
 };
 }  // namespace dynamixel_hardware

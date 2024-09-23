@@ -32,6 +32,7 @@ constexpr uint8_t kGoalVelocityIndex = 1;
 constexpr uint8_t kPresentPositionVelocityCurrentIndex = 0;
 constexpr const char * kGoalPositionItem = "Goal_Position";
 constexpr const char * kGoalVelocityItem = "Goal_Velocity";
+constexpr const char * kGoalCurrentItem = "Goal_Current";
 constexpr const char * kMovingSpeedItem = "Moving_Speed";
 constexpr const char * kPresentPositionItem = "Present_Position";
 constexpr const char * kPresentVelocityItem = "Present_Velocity";
@@ -57,7 +58,24 @@ return_type DynamixelHardware::configure(const hardware_interface::HardwareInfo 
     joints_[i].command.position = std::numeric_limits<double>::quiet_NaN();
     joints_[i].command.velocity = std::numeric_limits<double>::quiet_NaN();
     joints_[i].command.effort = std::numeric_limits<double>::quiet_NaN();
-    RCLCPP_INFO(rclcpp::get_logger(kDynamixelHardware), "joint_id %d: %d", i, joint_ids_[i]);
+
+    if (info_.joints[i].name == "gripper") {
+      gripper_id_ = joint_ids_[i];
+      if (info_.joints[i].parameters.find("current_limit") != info_.joints[i].parameters.end()) {
+        gripper_current_limit_ = std::stof(info_.joints[i].parameters.at("current_limit"));
+        RCLCPP_INFO(
+          rclcpp::get_logger(kDynamixelHardware), "gripper_current_limit: %.3f",
+          gripper_current_limit_);
+      } else {
+        RCLCPP_WARN(
+          rclcpp::get_logger(kDynamixelHardware),
+          "current_limit is not set for gripper. Use default: %.3f", gripper_current_limit_);
+      }
+      RCLCPP_INFO(
+        rclcpp::get_logger(kDynamixelHardware), "joint_id %d: %d is_gripper", i, joint_ids_[i]);
+    } else {
+      RCLCPP_INFO(rclcpp::get_logger(kDynamixelHardware), "joint_id %d: %d", i, joint_ids_[i]);
+    }
   }
 
   if (
@@ -392,6 +410,35 @@ return_type DynamixelHardware::set_control_mode(const ControlMode & mode, const 
     RCLCPP_FATAL(
       rclcpp::get_logger(kDynamixelHardware), "Only position/velocity control are implemented");
     return return_type::ERROR;
+  }
+
+  // set current-based position control mode for gripper
+  if (
+    gripper_id_ != 255 &&
+    (force_set || gripper_control_mode_ != ControlMode::CurrentBasedPosition)) {
+    bool torque_enabled = torque_enabled_;
+    if (torque_enabled) {
+      enable_torque(false);
+    }
+
+    if (!dynamixel_workbench_.setCurrentBasedPositionControlMode(gripper_id_, &log)) {
+      RCLCPP_FATAL(rclcpp::get_logger(kDynamixelHardware), "%s", log);
+      return return_type::ERROR;
+    }
+    int32_t current =
+      dynamixel_workbench_.convertCurrent2Value(gripper_id_, gripper_current_limit_);
+    if (!dynamixel_workbench_.itemWrite(gripper_id_, kGoalCurrentItem, current, &log)) {
+      RCLCPP_FATAL(rclcpp::get_logger(kDynamixelHardware), "%s", log);
+      return return_type::ERROR;
+    }
+
+    RCLCPP_INFO(
+      rclcpp::get_logger(kDynamixelHardware), "Current-based position control for gripper");
+    gripper_control_mode_ = ControlMode::CurrentBasedPosition;
+
+    if (torque_enabled) {
+      enable_torque(true);
+    }
   }
 
   return return_type::OK;

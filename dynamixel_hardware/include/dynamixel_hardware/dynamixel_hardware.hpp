@@ -24,6 +24,7 @@
 #include <hardware_interface/types/hardware_interface_return_values.hpp>
 #include <hardware_interface/types/hardware_interface_status_values.hpp>
 #include <map>
+#include <string>
 #include <vector>
 
 #include "dynamixel_hardware/visiblity_control.h"
@@ -42,6 +43,7 @@ struct JointValue
 
 struct Joint
 {
+  std::string name{};
   JointValue state{};
   JointValue command{};
 };
@@ -94,6 +96,7 @@ private:
   DynamixelWorkbench dynamixel_workbench_;
   std::map<const char * const, const ControlItem *> control_items_;
   std::vector<Joint> joints_;
+  std::vector<Joint> virtual_joints_;
   std::vector<uint8_t> joint_ids_;
   uint8_t gripper_id_{255};
   float gripper_current_limit_{200.0f};

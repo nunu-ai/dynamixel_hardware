@@ -47,34 +47,77 @@ return_type DynamixelHardware::configure(const hardware_interface::HardwareInfo 
     return return_type::ERROR;
   }
 
-  joints_.resize(info_.joints.size(), Joint());
-  joint_ids_.resize(info_.joints.size(), 0);
-
-  for (uint i = 0; i < info_.joints.size(); i++) {
-    joint_ids_[i] = std::stoi(info_.joints[i].parameters.at("id"));
-    joints_[i].state.position = std::numeric_limits<double>::quiet_NaN();
-    joints_[i].state.velocity = std::numeric_limits<double>::quiet_NaN();
-    joints_[i].state.effort = std::numeric_limits<double>::quiet_NaN();
-    joints_[i].command.position = std::numeric_limits<double>::quiet_NaN();
-    joints_[i].command.velocity = std::numeric_limits<double>::quiet_NaN();
-    joints_[i].command.effort = std::numeric_limits<double>::quiet_NaN();
-
-    if (info_.joints[i].name == "gripper") {
-      gripper_id_ = joint_ids_[i];
-      if (info_.joints[i].parameters.find("current_limit") != info_.joints[i].parameters.end()) {
-        gripper_current_limit_ = std::stof(info_.joints[i].parameters.at("current_limit"));
-        RCLCPP_INFO(
-          rclcpp::get_logger(kDynamixelHardware), "gripper_current_limit: %.3f",
-          gripper_current_limit_);
-      } else {
-        RCLCPP_WARN(
-          rclcpp::get_logger(kDynamixelHardware),
-          "current_limit is not set for gripper. Use default: %.3f", gripper_current_limit_);
-      }
-      RCLCPP_INFO(
-        rclcpp::get_logger(kDynamixelHardware), "joint_id %d: %d is_gripper", i, joint_ids_[i]);
+  // Count joints and virtual joints
+  int num_joints = 0;
+  int num_virtual_joints = 0;
+  for (const auto & joint : info_.joints) {
+    if (joint.parameters.find("is_virtual") != joint.parameters.end()) {
+      num_virtual_joints++;
     } else {
-      RCLCPP_INFO(rclcpp::get_logger(kDynamixelHardware), "joint_id %d: %d", i, joint_ids_[i]);
+      num_joints++;
+    }
+  }
+
+  joints_.resize(num_joints, Joint());
+  virtual_joints_.resize(num_virtual_joints, Joint());
+  joint_ids_.resize(num_joints, 0);
+
+  int joint_index = 0;
+  int virtual_joint_index = 0;
+  for (uint i = 0; i < info_.joints.size(); i++) {
+    if (
+      info_.joints[i].parameters.find("is_virtual") != info_.joints[i].parameters.end() &&
+      info_.joints[i].parameters.at("is_virtual") == "true") {
+      // virtual joint
+      virtual_joints_[virtual_joint_index].name = info_.joints[i].name;
+      virtual_joints_[virtual_joint_index].state.position =
+        std::numeric_limits<double>::quiet_NaN();
+      virtual_joints_[virtual_joint_index].state.velocity =
+        std::numeric_limits<double>::quiet_NaN();
+      virtual_joints_[virtual_joint_index].state.effort = std::numeric_limits<double>::quiet_NaN();
+      virtual_joints_[virtual_joint_index].command.position =
+        std::numeric_limits<double>::quiet_NaN();
+      virtual_joints_[virtual_joint_index].command.velocity =
+        std::numeric_limits<double>::quiet_NaN();
+      virtual_joints_[virtual_joint_index].command.effort =
+        std::numeric_limits<double>::quiet_NaN();
+
+      RCLCPP_INFO(
+        rclcpp::get_logger(kDynamixelHardware), "virtual joint name %s",
+        info_.joints[i].name.c_str());
+
+      virtual_joint_index++;
+    } else {
+      // real joint
+      joint_ids_[joint_index] = std::stoi(info_.joints[i].parameters.at("id"));
+      joints_[joint_index].name = info_.joints[i].name;
+      joints_[joint_index].state.position = std::numeric_limits<double>::quiet_NaN();
+      joints_[joint_index].state.velocity = std::numeric_limits<double>::quiet_NaN();
+      joints_[joint_index].state.effort = std::numeric_limits<double>::quiet_NaN();
+      joints_[joint_index].command.position = std::numeric_limits<double>::quiet_NaN();
+      joints_[joint_index].command.velocity = std::numeric_limits<double>::quiet_NaN();
+      joints_[joint_index].command.effort = std::numeric_limits<double>::quiet_NaN();
+
+      if (info_.joints[i].name == "gripper") {
+        gripper_id_ = joint_ids_[joint_index];
+        if (info_.joints[i].parameters.find("current_limit") != info_.joints[i].parameters.end()) {
+          gripper_current_limit_ = std::stof(info_.joints[i].parameters.at("current_limit"));
+          RCLCPP_INFO(
+            rclcpp::get_logger(kDynamixelHardware), "gripper_current_limit: %.3f",
+            gripper_current_limit_);
+        } else {
+          RCLCPP_WARN(
+            rclcpp::get_logger(kDynamixelHardware),
+            "current_limit is not set for gripper. Use default: %.3f", gripper_current_limit_);
+        }
+        RCLCPP_INFO(
+          rclcpp::get_logger(kDynamixelHardware), "joint_id %d: %d is_gripper", i,
+          joint_ids_[joint_index]);
+      } else {
+        RCLCPP_INFO(
+          rclcpp::get_logger(kDynamixelHardware), "joint_id %d: %d", i, joint_ids_[joint_index]);
+      }
+      ++joint_index;
     }
   }
 
@@ -188,13 +231,30 @@ std::vector<hardware_interface::StateInterface> DynamixelHardware::export_state_
 {
   RCLCPP_DEBUG(rclcpp::get_logger(kDynamixelHardware), "export_state_interfaces");
   std::vector<hardware_interface::StateInterface> state_interfaces;
-  for (uint i = 0; i < info_.joints.size(); i++) {
+  // for (uint i = 0; i < info_.joints.size(); i++) {
+  //   state_interfaces.emplace_back(hardware_interface::StateInterface(
+  //     info_.joints[i].name, hardware_interface::HW_IF_POSITION, &joints_[i].state.position));
+  //   state_interfaces.emplace_back(hardware_interface::StateInterface(
+  //     info_.joints[i].name, hardware_interface::HW_IF_VELOCITY, &joints_[i].state.velocity));
+  //   state_interfaces.emplace_back(hardware_interface::StateInterface(
+  //     info_.joints[i].name, hardware_interface::HW_IF_EFFORT, &joints_[i].state.effort));
+  // }
+  for (auto & joint : joints_) {
     state_interfaces.emplace_back(hardware_interface::StateInterface(
-      info_.joints[i].name, hardware_interface::HW_IF_POSITION, &joints_[i].state.position));
+      joint.name, hardware_interface::HW_IF_POSITION, &joint.state.position));
     state_interfaces.emplace_back(hardware_interface::StateInterface(
-      info_.joints[i].name, hardware_interface::HW_IF_VELOCITY, &joints_[i].state.velocity));
+      joint.name, hardware_interface::HW_IF_VELOCITY, &joint.state.velocity));
     state_interfaces.emplace_back(hardware_interface::StateInterface(
-      info_.joints[i].name, hardware_interface::HW_IF_EFFORT, &joints_[i].state.effort));
+      joint.name, hardware_interface::HW_IF_EFFORT, &joint.state.effort));
+  }
+
+  for (auto & joint : virtual_joints_) {
+    state_interfaces.emplace_back(hardware_interface::StateInterface(
+      joint.name, hardware_interface::HW_IF_POSITION, &joint.state.position));
+    state_interfaces.emplace_back(hardware_interface::StateInterface(
+      joint.name, hardware_interface::HW_IF_VELOCITY, &joint.state.velocity));
+    state_interfaces.emplace_back(hardware_interface::StateInterface(
+      joint.name, hardware_interface::HW_IF_EFFORT, &joint.state.effort));
   }
 
   return state_interfaces;
@@ -204,11 +264,24 @@ std::vector<hardware_interface::CommandInterface> DynamixelHardware::export_comm
 {
   RCLCPP_DEBUG(rclcpp::get_logger(kDynamixelHardware), "export_command_interfaces");
   std::vector<hardware_interface::CommandInterface> command_interfaces;
-  for (uint i = 0; i < info_.joints.size(); i++) {
+  // for (uint i = 0; i < info_.joints.size(); i++) {
+  //   command_interfaces.emplace_back(hardware_interface::CommandInterface(
+  //     info_.joints[i].name, hardware_interface::HW_IF_POSITION, &joints_[i].command.position));
+  //   command_interfaces.emplace_back(hardware_interface::CommandInterface(
+  //     info_.joints[i].name, hardware_interface::HW_IF_VELOCITY, &joints_[i].command.velocity));
+  // }
+  for (auto & joint : joints_) {
     command_interfaces.emplace_back(hardware_interface::CommandInterface(
-      info_.joints[i].name, hardware_interface::HW_IF_POSITION, &joints_[i].command.position));
+      joint.name, hardware_interface::HW_IF_POSITION, &joint.command.position));
     command_interfaces.emplace_back(hardware_interface::CommandInterface(
-      info_.joints[i].name, hardware_interface::HW_IF_VELOCITY, &joints_[i].command.velocity));
+      joint.name, hardware_interface::HW_IF_VELOCITY, &joint.command.velocity));
+  }
+
+  for (auto & joint : virtual_joints_) {
+    command_interfaces.emplace_back(hardware_interface::CommandInterface(
+      joint.name, hardware_interface::HW_IF_POSITION, &joint.command.position));
+    command_interfaces.emplace_back(hardware_interface::CommandInterface(
+      joint.name, hardware_interface::HW_IF_VELOCITY, &joint.command.velocity));
   }
 
   return command_interfaces;
@@ -217,11 +290,27 @@ std::vector<hardware_interface::CommandInterface> DynamixelHardware::export_comm
 return_type DynamixelHardware::start()
 {
   RCLCPP_DEBUG(rclcpp::get_logger(kDynamixelHardware), "start");
-  for (uint i = 0; i < joints_.size(); i++) {
-    if (use_dummy_ && std::isnan(joints_[i].state.position)) {
-      joints_[i].state.position = 0.0;
-      joints_[i].state.velocity = 0.0;
-      joints_[i].state.effort = 0.0;
+  // for (uint i = 0; i < joints_.size(); i++) {
+  //   if (use_dummy_ && std::isnan(joints_[i].state.position)) {
+  //     joints_[i].state.position = 0.0;
+  //     joints_[i].state.velocity = 0.0;
+  //     joints_[i].state.effort = 0.0;
+  //   }
+  // }
+  if (use_dummy_) {
+    for (auto & joint : joints_) {
+      if (std::isnan(joint.state.position)) {
+        joint.state.position = 0.0;
+        joint.state.velocity = 0.0;
+        joint.state.effort = 0.0;
+      }
+    }
+    for (auto & joint : virtual_joints_) {
+      if (std::isnan(joint.state.position)) {
+        joint.state.position = 0.0;
+        joint.state.velocity = 0.0;
+        joint.state.effort = 0.0;
+      }
     }
   }
   read();
@@ -290,6 +379,13 @@ return_type DynamixelHardware::read()
 
 return_type DynamixelHardware::write()
 {
+  // for virtual joints, just copy command to state
+  for (auto & joint : virtual_joints_) {
+    joint.state.position = joint.command.position;
+    joint.state.velocity = joint.command.velocity;
+    joint.state.effort = joint.command.effort;
+  }
+
   if (use_dummy_) {
     for (auto & joint : joints_) {
       joint.state.position = joint.command.position;
@@ -450,6 +546,12 @@ return_type DynamixelHardware::reset_command()
     joints_[i].command.position = joints_[i].state.position;
     joints_[i].command.velocity = 0.0;
     joints_[i].command.effort = 0.0;
+  }
+
+  for (uint i = 0; i < virtual_joints_.size(); i++) {
+    virtual_joints_[i].command.position = virtual_joints_[i].state.position;
+    virtual_joints_[i].command.velocity = 0.0;
+    virtual_joints_[i].command.effort = 0.0;
   }
 
   return return_type::OK;

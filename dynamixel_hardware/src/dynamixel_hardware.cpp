@@ -142,9 +142,9 @@ return_type DynamixelHardware::configure(const hardware_interface::HardwareInfo 
     return return_type::ERROR;
   }
 
-  for (uint i = 0; i < info_.joints.size(); ++i) {
+  for (auto id : joint_ids_) {
     uint16_t model_number = 0;
-    if (!dynamixel_workbench_.ping(joint_ids_[i], &model_number, &log)) {
+    if (!dynamixel_workbench_.ping(id, &model_number, &log)) {
       RCLCPP_FATAL(rclcpp::get_logger(kDynamixelHardware), "%s", log);
       return return_type::ERROR;
     }
@@ -297,6 +297,16 @@ return_type DynamixelHardware::start()
   //     joints_[i].state.effort = 0.0;
   //   }
   // }
+
+  // for virtual joints, always set to 0 when starting
+  for (auto & joint : virtual_joints_) {
+    if (std::isnan(joint.state.position)) {
+      joint.state.position = 0.0;
+      joint.state.velocity = 0.0;
+      joint.state.effort = 0.0;
+    }
+  }
+
   if (use_dummy_) {
     for (auto & joint : joints_) {
       if (std::isnan(joint.state.position)) {
@@ -305,14 +315,8 @@ return_type DynamixelHardware::start()
         joint.state.effort = 0.0;
       }
     }
-    for (auto & joint : virtual_joints_) {
-      if (std::isnan(joint.state.position)) {
-        joint.state.position = 0.0;
-        joint.state.velocity = 0.0;
-        joint.state.effort = 0.0;
-      }
-    }
   }
+
   read();
   reset_command();
   write();
@@ -334,10 +338,10 @@ return_type DynamixelHardware::read()
     return return_type::OK;
   }
 
-  std::vector<uint8_t> ids(info_.joints.size(), 0);
-  std::vector<int32_t> positions(info_.joints.size(), 0);
-  std::vector<int32_t> velocities(info_.joints.size(), 0);
-  std::vector<int32_t> currents(info_.joints.size(), 0);
+  std::vector<uint8_t> ids(joints_.size(), 0);
+  std::vector<int32_t> positions(joints_.size(), 0);
+  std::vector<int32_t> velocities(joints_.size(), 0);
+  std::vector<int32_t> currents(joints_.size(), 0);
 
   std::copy(joint_ids_.begin(), joint_ids_.end(), ids.begin());
   const char * log = nullptr;
@@ -394,8 +398,8 @@ return_type DynamixelHardware::write()
     return return_type::OK;
   }
 
-  std::vector<uint8_t> ids(info_.joints.size(), 0);
-  std::vector<int32_t> commands(info_.joints.size(), 0);
+  std::vector<uint8_t> ids(joints_.size(), 0);
+  std::vector<int32_t> commands(joints_.size(), 0);
 
   std::copy(joint_ids_.begin(), joint_ids_.end(), ids.begin());
   const char * log = nullptr;
@@ -439,7 +443,7 @@ return_type DynamixelHardware::enable_torque(const bool enabled)
   const char * log = nullptr;
 
   if (enabled && !torque_enabled_) {
-    for (uint i = 0; i < info_.joints.size(); ++i) {
+    for (uint i = 0; i < joints_.size(); ++i) {
       if (!dynamixel_workbench_.torqueOn(joint_ids_[i], &log)) {
         RCLCPP_FATAL(rclcpp::get_logger(kDynamixelHardware), "%s", log);
         return return_type::ERROR;
@@ -448,7 +452,7 @@ return_type DynamixelHardware::enable_torque(const bool enabled)
     reset_command();
     RCLCPP_INFO(rclcpp::get_logger(kDynamixelHardware), "Torque enabled");
   } else if (!enabled && torque_enabled_) {
-    for (uint i = 0; i < info_.joints.size(); ++i) {
+    for (uint i = 0; i < joints_.size(); ++i) {
       if (!dynamixel_workbench_.torqueOff(joint_ids_[i], &log)) {
         RCLCPP_FATAL(rclcpp::get_logger(kDynamixelHardware), "%s", log);
         return return_type::ERROR;

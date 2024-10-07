@@ -152,7 +152,11 @@ return_type DynamixelHardware::configure(const hardware_interface::HardwareInfo 
 
   enable_torque(false);
   set_control_mode(ControlMode::Position, true);
-  enable_torque(true);
+  if (
+    info_.hardware_parameters.find("torque_off") == info_.hardware_parameters.end() ||
+    info_.hardware_parameters.at("torque_off") != "true") {
+    enable_torque(true);
+  }
 
   const ControlItem * goal_position =
     dynamixel_workbench_.getItemInfo(joint_ids_[0], kGoalPositionItem);
